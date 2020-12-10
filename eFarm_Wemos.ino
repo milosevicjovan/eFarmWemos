@@ -12,10 +12,11 @@
 //simple timer
 SimpleTimer timer;
 
+// disable mux for now...
 //for multiple analog inputs
-#define MUX_A D7
-#define MUX_B D6
-#define MUX_C D5
+//#define MUX_A D7
+//#define MUX_B D6
+//#define MUX_C D5
 
 //digital pins
 #define PIN_WATER D2
@@ -24,6 +25,8 @@ SimpleTimer timer;
 #define PIN_RED D10
 #define PIN_GREEN D9
 #define PIN_BLUE D8
+
+#define PIN_PUMP_BUTTON D7
 
 //analog pin
 #define ANALOG_INPUT A0
@@ -85,6 +88,43 @@ void connectToWiFi(void) {
   }
   Serial.println();
   return;
+}
+
+void updatePump(boolean newState) {
+  httpPut.begin(url + "/settings?waterPump=" + (newState ? "true" : "false"));
+
+  if (WiFi.status() == WL_CONNECTED) {      
+      
+      httpPut.addHeader("Authorization", "Basic AUTHORIZATION_TOKEN"); 
+
+      int httpCode = httpPut.sendRequest("PUT", "");
+      
+      if (httpCode > 0) {
+        if (httpCode >= 200 && httpCode < 300) {      
+            Serial.println();  
+            Serial.println("PUT request status: " + String(httpCode));
+            Serial.println("OK");         
+
+        } else if (httpCode >= 400 && httpCode <500) {
+            Serial.println("PUT request status: " + String(httpCode));
+            Serial.println("PUT: Client error");
+        } else if (httpCode >= 500 && httpCode <600) {
+            Serial.println("PUT request status: " + String(httpCode));
+            Serial.println("PUT: Server error");
+        } else {
+            Serial.println("PUT request status: " + String(httpCode));
+            Serial.println("PUT: Unkwnown");
+        }       
+      } else {
+            Serial.println("PUT request status: " + String(httpCode));
+            Serial.println("PUT: Unknown error");
+      }
+  } else {
+      Serial.println("");
+      Serial.println("[PUT] Wifi: Not connected");
+      Serial.println("Trying again...");
+      connectToWiFi();
+  }
 }
 
 void readSettings(void) {
@@ -232,8 +272,9 @@ void readWeather() {
 }
 
 void readMoisture(void) {
-  
-  changeMux(LOW, LOW, LOW);
+
+  //disable for now
+  //changeMux(LOW, LOW, LOW);
  
   int analogValue;
   float sum = 0;
@@ -312,6 +353,43 @@ void displayInformation(void) {
   delay(1000);
 }
 
+// code used from https://github.com/Mjrovai/ArduFarmBot-2/tree/master/ArduFarmBot2_Local_Automatic_Ctrl_V2
+// debouncing prevents false readings
+// very usefull stuff
+// who would say
+boolean debounce(int pin)
+{
+  boolean state;
+  boolean previousState;
+  const int debounceDelay = 30;
+  
+  previousState = digitalRead(pin);
+  for(int counter=0; counter< debounceDelay; counter++)
+  {
+    delay(1);
+    state = digitalRead(pin);
+    if(state != previousState)
+    {
+      counter = 0;
+      previousState = state;
+    } 
+  }
+  return state;
+}
+
+void readPumpButton(void) {
+  boolean pumpState = debounce(PIN_PUMP_BUTTON);
+  if (pumpState) {
+    if (waterPumpOn) {
+      updatePump(false);
+    } else {
+      updatePump(true);
+    }
+    readSettings();
+    checkPump();
+    displayData();
+  }
+}
 
 void setup() {
   
@@ -325,9 +403,10 @@ void setup() {
 
   delay(1000); 
 
-  pinMode(MUX_A, OUTPUT);
-  pinMode(MUX_B, OUTPUT);
-  pinMode(MUX_C, OUTPUT);
+  // disable for now...
+  //pinMode(MUX_A, OUTPUT);
+  //pinMode(MUX_B, OUTPUT);
+  //pinMode(MUX_C, OUTPUT);
   
   pinMode(PIN_WATER, INPUT);
   pinMode(PIN_RAIN, INPUT);
@@ -335,6 +414,8 @@ void setup() {
   pinMode(PIN_RED, OUTPUT);
   pinMode(PIN_GREEN, OUTPUT);
   pinMode(PIN_BLUE, OUTPUT);
+
+  pinMode(PIN_PUMP_BUTTON, INPUT_PULLUP);
   
   connectToWiFi();
 
@@ -349,6 +430,7 @@ void setup() {
   timer.setInterval(1000, readMoisture);
   timer.setInterval(1000, readRain);
   timer.setInterval(1000, displayData);
+  timer.setInterval(1000, readPumpButton);
   timer.setInterval(10000, displayInformation);
   
   
@@ -361,12 +443,15 @@ void setup() {
   
   httpPost.setReuse(true);
   httpGet.setReuse(true);
+  httpPut.setReuse(true);
 }
-void changeMux(int c, int b, int a) {
-  digitalWrite(MUX_A, a);
-  digitalWrite(MUX_B, b);
-  digitalWrite(MUX_C, c);
-}
+
+//disable for now
+//void changeMux(int c, int b, int a) {
+//  digitalWrite(MUX_A, a);
+//  digitalWrite(MUX_B, b);
+//  digitalWrite(MUX_C, c);
+//}
 
 void loop() {  
   timer.run();
