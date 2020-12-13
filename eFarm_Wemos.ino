@@ -27,6 +27,7 @@ SimpleTimer timer;
 #define PIN_BLUE D8
 
 #define PIN_PUMP_BUTTON D7
+#define PIN_PUMP D11
 
 //analog pin
 #define ANALOG_INPUT A0
@@ -60,6 +61,7 @@ const char* password = "password";
 const String url = "http://192.168.0.101/api/device";
 HTTPClient httpPost;
 HTTPClient httpGet;
+HTTPClient httpPut;
 int i = 0;
     
 //ssd1306 display
@@ -251,10 +253,12 @@ void checkPump() {
       digitalWrite(PIN_RED, LOW);
       digitalWrite(PIN_GREEN, HIGH);
       digitalWrite(PIN_BLUE, LOW);
+      digitalWrite(PIN_PUMP, HIGH);
   } else {
       digitalWrite(PIN_RED, LOW);
       digitalWrite(PIN_GREEN, LOW);
       digitalWrite(PIN_BLUE, LOW);  
+      digitalWrite(PIN_PUMP, LOW);
   }
 }
 
@@ -381,7 +385,7 @@ void readPumpButton(void) {
   boolean pumpState = debounce(PIN_PUMP_BUTTON);
   if (pumpState) {
     if (waterPumpOn) {
-      updatePump(false);
+      updatePump(false); //pump was on, now we turn it off
     } else {
       updatePump(true);
     }
@@ -416,6 +420,7 @@ void setup() {
   pinMode(PIN_BLUE, OUTPUT);
 
   pinMode(PIN_PUMP_BUTTON, INPUT_PULLUP);
+  pinMode(PIN_PUMP, OUTPUT);
   
   connectToWiFi();
 
