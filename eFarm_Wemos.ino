@@ -45,6 +45,7 @@ int moistureMax;
 int temperatureMin;
 int temperatureMax;
 bool waterPumpOn;
+bool autoControlOn;
 
 //sensors data
 String water;
@@ -93,7 +94,7 @@ void connectToWiFi(void) {
 }
 
 void updatePump(boolean newState) {
-  httpPut.begin(url + "/settings?waterPump=" + (newState ? "true" : "false"));
+  httpPut.begin(url + "/device-settings?waterPump=" + (newState ? "true" : "false"));
 
   if (WiFi.status() == WL_CONNECTED) {      
       
@@ -131,7 +132,7 @@ void updatePump(boolean newState) {
 
 void readSettings(void) {
 
-    httpGet.begin(url + "/settings");
+    httpGet.begin(url + "/device-settings");
     
     if (WiFi.status() == WL_CONNECTED) {
       
@@ -140,12 +141,17 @@ void readSettings(void) {
 
       if (httpCode > 0) {
         if (httpCode >= 200 && httpCode < 300) {
-            const size_t capacity = JSON_OBJECT_SIZE(7) + 90;
-            DynamicJsonDocument doc(capacity);
 
+            StaticJsonDocument<256> doc;
             const String json = httpGet.getString();
 
-            deserializeJson(doc, json);
+            DeserializationError error = deserializeJson(doc, json);
+
+            if (error) {
+                Serial.print(F("Json deserialization failed: "));
+                Serial.println(error.f_str());
+                return;
+            }
 
             deviceId = doc["DeviceId"]; // 1
             moistureMin = doc["MoistureMin"]; // 0
@@ -153,6 +159,7 @@ void readSettings(void) {
             temperatureMin = doc["TemperatureMin"]; // 0
             temperatureMax = doc["TemperatureMax"]; // 0
             waterPumpOn = doc["WaterPump"]; // true
+            autoControlOn = doc["AutoControl"]; // true;
 
             Serial.println("");
             Serial.println("Get request status: " + String(httpCode));
@@ -257,7 +264,7 @@ void checkPump() {
   } else {
       digitalWrite(PIN_RED, LOW);
       digitalWrite(PIN_GREEN, LOW);
-      digitalWrite(PIN_BLUE, LOW);  
+      digitalWrite(PIN_BLUE, LOW);
       digitalWrite(PIN_PUMP, LOW);
   }
 }
@@ -353,6 +360,8 @@ void displayInformation(void) {
   } else {
     display.println("Temperature is ok!");
   }
+  display.println();
+  display.println("Auto-control is " + String(autoControlOn ? "ON" : "OFF"));
   display.display();
   delay(1000);
 }
@@ -382,6 +391,11 @@ boolean debounce(int pin)
 }
 
 void readPumpButton(void) {
+  
+  if (autoControlOn) {
+    return;
+  }
+
   boolean pumpState = debounce(PIN_PUMP_BUTTON);
   if (pumpState) {
     if (waterPumpOn) {
@@ -392,6 +406,24 @@ void readPumpButton(void) {
     readSettings();
     checkPump();
     displayData();
+  }
+}
+
+void autoControlPump(void) {
+  if (autoControlOn) {
+    
+    int optimalMoisture = 0;
+    optimalMoisture = ((moistureMax - moistureMin) / 2) + moistureMin;
+    
+     if (moisture<=optimalMoisture) {
+        waterPumpOn = true;
+        updatePump(true);
+        checkPump();
+     } else {
+        waterPumpOn = false;
+        updatePump(false);
+        checkPump();
+    } 
   }
 }
 
@@ -436,6 +468,7 @@ void setup() {
   timer.setInterval(1000, readRain);
   timer.setInterval(1000, displayData);
   timer.setInterval(1000, readPumpButton);
+  timer.setInterval(1000, autoControlPump);
   timer.setInterval(10000, displayInformation);
   
   
